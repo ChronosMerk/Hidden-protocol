@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hidden_protocol
+    restart: unless-stopped
+    env_file:
+      - .env
