@@ -5,9 +5,9 @@ from aiogram import Router
 from aiogram import F
 from aiogram.enums import ChatType
 from aiogram.types import Message, FSInputFile
-
 from app.services.download_video import DownloadVideo
 from app.utils.urls import first_url, domain_ok
+from app.utils.logger import setup_logger
 
 class VideoRouter:
     def __init__(
@@ -20,6 +20,7 @@ class VideoRouter:
         self.downloader = downloader
         self.topic_chat_id = topic_chat_id
         self.topic_thread_id = topic_thread_id
+        self.log = setup_logger()
         self._register()
 
     def _register(self):
@@ -30,6 +31,8 @@ class VideoRouter:
         url = first_url(m.text)
         if not url or not domain_ok(url):
             return False
+
+        self.log.info(f"URL от @{m.from_user.username or m.from_user.full_name}: {url}")
 
         is_private = (m.chat.type == ChatType.PRIVATE)
         if is_private:
@@ -68,7 +71,8 @@ class VideoRouter:
                 with contextlib.suppress(Exception):
                     await m.delete()
 
-        except Exception:
+        except Exception as e:
+            self.log.exception("Ошибка скачивания/отправки url=%s", url)
             await m.answer("⚠️ Не удалось скачать или отправить видео. Проверь ссылку.")
         finally:
             if filepath:

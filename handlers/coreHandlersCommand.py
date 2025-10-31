@@ -3,23 +3,27 @@ from typing import Set
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
+from app.utils.logger import setup_logger
 
 class CoreHandlers:
     def __init__(self, admins: Set[int]):
         self.admins = admins
         self.router = Router()
         self._register()
+        self.log = setup_logger()
 
     def _register(self):
         self.router.message.register(self.start, CommandStart())
         self.router.message.register(self.help_cmd, Command("help"))
-        self.router.message.register(self.gpt_cmd, Command("gpt"))
+        self.router.message.register(self.gpt_cmd, Command("gpt"),F.from_user.id.in_(self.admins))
         self.router.message.register(self.unknown_cmd, F.text.startswith("/"))
 
     async def start(self, m: Message):
+        self.log.info(f"/start от @{m.from_user.username or m.from_user.full_name} (ID: {m.from_user.id})")
         await m.answer("Hidden protocol активен. Используй /help для списка команд.")
 
     async def help_cmd(self, m: Message):
+        self.log.info(f"/help от @{m.from_user.username or m.from_user.full_name} (ID: {m.from_user.id})")
         await m.answer(
             "Команды:\n"
             "/start — запустить бота\n"
@@ -28,8 +32,6 @@ class CoreHandlers:
         )
 
     async def gpt_cmd(self, m: Message):
-        if m.from_user.id not in self.admins:
-            return False
         await m.answer("GPT функция в разработке.")
 
     async def unknown_cmd(self, m: Message):

@@ -22,6 +22,9 @@ class Config:
             "ADMIN_IDS": admin_ids,
             "DOWNLOAD_DIR": os.getenv("DOWNLOAD_DIR", "/app/downloads"),
             "TOPIC_CHAT_ID": int(os.getenv("TOPIC_CHAT_ID")) if os.getenv("TOPIC_CHAT_ID") else None,
-            "TOPIC_THREAD_ID": int(os.getenv("TOPIC_THREAD_ID")) if os.getenv("TOPIC_THREAD_ID") else None
+            "TOPIC_THREAD_ID": int(os.getenv("TOPIC_THREAD_ID")) if os.getenv("TOPIC_THREAD_ID") else None,
+            "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
+            "LOG_CHAT_ID": int(os.getenv("LOG_CHAT_ID")) if os.getenv("LOG_CHAT_ID") else None,
+            "LOG_THREAD_ID": int(os.getenv("LOG_THREAD_ID")) if os.getenv("LOG_THREAD_ID") else None
         }
 
