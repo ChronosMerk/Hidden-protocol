@@ -2,11 +2,23 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
 
 class NotifyOrErrorFilter(logging.Filter):
-    """Пропускает записи, если level>=ERROR или record.notify == True."""
+    """Пропускает записи, если уровень >= ERROR или record.notify == True."""
     def filter(self, record: logging.LogRecord) -> bool:
         return record.levelno >= logging.ERROR or getattr(record, "notify", False)
+
+
+class TzFormatter(logging.Formatter):
+    """Форматтер, использующий часовой пояс Asia/Almaty (+5)."""
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=ZoneInfo("Asia/Almaty"))
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.isoformat()
+
 
 def setup_logger(level: str = "INFO") -> logging.Logger:
     os.makedirs("logs", exist_ok=True)
@@ -16,23 +28,27 @@ def setup_logger(level: str = "INFO") -> logging.Logger:
 
     log.setLevel(level.upper())
 
-    fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    fmt = TzFormatter(
+        "%(asctime)s [%(levelname)s] %(name)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # Консоль
+    # Консольный вывод
     ch = logging.StreamHandler()
     ch.setFormatter(fmt)
     ch.setLevel(level.upper())
     log.addHandler(ch)
 
-    # Файл — пишем всё
-    file_name = datetime.now().strftime("bot_log_%Y-%m-%d.log")
-    fh = RotatingFileHandler(os.path.join("logs", file_name),
-                             maxBytes=2_000_000, backupCount=5, encoding="utf-8")
+    # Файл — полный лог (DEBUG+)
+    file_name = datetime.now(tz=ZoneInfo("Asia/Almaty")).strftime("bot_log_%Y-%m-%d.log")
+    fh = RotatingFileHandler(
+        os.path.join("logs", file_name),
+        maxBytes=2_000_000,
+        backupCount=5,
+        encoding="utf-8"
+    )
     fh.setFormatter(fmt)
-    fh.setLevel(logging.DEBUG)      # <- весь поток
+    fh.setLevel(logging.DEBUG)
     log.addHandler(fh)
 
     return log
