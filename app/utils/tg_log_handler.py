@@ -24,7 +24,8 @@ class TelegramLogHandler(logging.Handler):
         self.loop = loop or asyncio.get_event_loop()
         self.disable_notification = disable_notification
         if self.formatter is None:
-            self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
+            self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s",
+                                  datefmt="%Y-%m-%d %H:%M:%S"))
 
     def emit(self, record: logging.LogRecord) -> None:
         try:

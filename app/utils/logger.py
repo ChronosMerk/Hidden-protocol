@@ -17,7 +17,7 @@ def setup_logger(level: str = "INFO") -> logging.Logger:
     log.setLevel(level.upper())
 
     fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s",
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
