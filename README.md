@@ -65,7 +65,7 @@ app/
 
 1. **Клонировать проект**
    ```bash
-   git clone https://github.com/<username>/hidden-protocol-bot.git
+   git clone https://github.com/ChronosMerk/Hidden-protocol/
    cd hidden-protocol-bot
     ```
 2. **Создать и активировать виртуальное окружение**
