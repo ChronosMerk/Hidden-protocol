@@ -6,7 +6,7 @@ class Config:
     def __init__(self):
         load_dotenv()
         self.missing = []
-        self.keys = ['TOKEN', 'API_KEY_JWT', 'HOST', 'PORT']
+        self.keys = ['TOKEN', 'API_KEY_JWT']
         self.missing = [key for key in self.keys if not os.getenv(key)]
         if self.missing:
             raise ValueError(f"❌ Отсутствуют переменные в .env: {', '.join(self.missing)}")
@@ -19,7 +19,7 @@ class Config:
         return {
             "BOT_TOKEN": os.getenv("TOKEN"),
             "API_KEY_JWT": os.getenv("API_KEY_JWT"),
-            "HOST": os.getenv("HOST"),
+            "HOST": os.getenv("HOST", "0.0.0.0"),
             "PORT": int(os.getenv("PORT", 8000)),
             "ADMIN_IDS": admin_ids,
             "DOWNLOAD_DIR": os.getenv("DOWNLOAD_DIR", "/app/downloads"),
@@ -30,4 +30,3 @@ class Config:
             "LOG_THREAD_ID": int(os.getenv("LOG_THREAD_ID")) if os.getenv("LOG_THREAD_ID") else None,
             "ALLOWED_GROUP_IDS": allowed_group_ids,  # set[int]
         }
-
