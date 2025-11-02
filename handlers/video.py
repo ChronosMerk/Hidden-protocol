@@ -53,6 +53,14 @@ class VideoRouter:
         if not url:
             log.debug("skip_no_url user=%s chat=%s type=%s", user_id, chat_id, chat_type)
             return False
+
+        if "instagram.com/p/" in url:
+            log.info(
+                "deny_instagram_post user=%s chat=%s type=%s url=%s reason=instagram_post",
+                user_id, chat_id, chat_type, url, extra={"notify": False}
+            )
+            return False
+
         if not domain_ok(url):
             log.info("deny_url user=%s chat=%s type=%s url=%s reason=unsupported_domain",
                      user_id, chat_id, chat_type, url, extra={"notify": True})
