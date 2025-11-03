@@ -48,7 +48,7 @@ class RunHiddenProtocol:
             tg.addFilter(NotifyOrErrorFilter())
             logging.getLogger("hidden_protocol").addHandler(tg)
 
-        self.log.info("Bot starting…", extra={"notify": True})
+        self.log.info("✅Bot starting…", extra={"notify": True})
         try:
             await self.dp.start_polling(self.bot)
         except Exception:
