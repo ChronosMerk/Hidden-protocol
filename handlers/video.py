@@ -79,14 +79,18 @@ class VideoRouter:
                         user_id, chat_id, chat_type, url, extra={"notify": True})
             return False
 
-        if not is_private and m.message_thread_id is not None:
-            target_chat_id = chat_id
-            target_thread_id = m.message_thread_id
-            route_note = "group_same_thread"
-        elif not is_private and self.topic_chat_id and chat_id == self.topic_chat_id and self.topic_thread_id is not None:
+        # --- Роутинг ---
+        # 1) В специальный тред в группе (если настроен и сообщение из этой группы)
+        if not is_private and self.topic_chat_id and chat_id == self.topic_chat_id and self.topic_thread_id is not None:
             target_chat_id = chat_id
             target_thread_id = self.topic_thread_id
             route_note = "group_to_special_thread"
+        # 2) Если в группе и сообщение в треде, отправляем в тот же тред
+        elif not is_private and m.message_thread_id is not None:
+            target_chat_id = chat_id
+            target_thread_id = m.message_thread_id
+            route_note = "group_same_thread"
+        # 3) Иначе — в тот же чат без треда или лс
         else:
             target_chat_id = chat_id
             target_thread_id = None
@@ -136,9 +140,9 @@ class VideoRouter:
                 user_id, chat_id, chat_type, url, filepath, target_chat_id, target_thread_id
             )
 
-            #if not is_private:
-            with contextlib.suppress(Exception):
-                await m.delete()
+            if not is_private:
+                with contextlib.suppress(Exception):
+                    await m.delete()
 
         except Exception as e:
             log.exception(
