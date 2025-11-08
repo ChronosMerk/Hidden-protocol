@@ -8,15 +8,8 @@ from aiogram.enums import ChatType, ChatAction
 from aiogram.types import Message, FSInputFile
 
 from app.services.download_video import DownloadVideo
-from app.utils.urls import first_url
+from app.utils.urls import first_url, is_allowed_url
 
-# --- допустимые ссылки ---
-ALLOWED_URLS = (
-    "https://www.instagram.com/reel/",
-    "https://www.tiktok.com/",
-    "https://vt.tiktok.com/",
-    "https://vm.tiktok.com/",
-)
 
 def _type_str(t) -> str:
     return t.value if hasattr(t, "value") else str(t)
@@ -63,11 +56,9 @@ class VideoRouter:
             return False
 
         # --- Проверка разрешённых доменов ---
-        if not any(url.startswith(prefix) for prefix in ALLOWED_URLS):
-            log.info(
-                "deny_url_not_allowed user=%s chat=%s type=%s url=%s reason=not_in_allowed_list",
-                user_id, chat_id, chat_type, url, extra={"notify": False}
-            )
+        if not is_allowed_url(url):
+            log.info("deny_url_not_allowed user=%s chat=%s type=%s url=%s reason=not_in_allowed_list",
+                     user_id, chat_id, chat_type, url, extra={"notify": False})
             return False
 
         is_private = _is_private(m.chat)
