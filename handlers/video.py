@@ -88,7 +88,19 @@ class VideoRouter:
             route_note = "private_echo" if is_private else "group_same_chat"
 
         username = f"@{user.username}" if user and user.username else (user.full_name if user else "unknown")
-        caption = f"🎬 Отправлено пользователем: {username}\n🌐 Ссылка: {url}"
+        comment = f"{m.text.replace(url, "").strip()}"
+
+        if comment:
+            caption = (
+                f"🎬 Отправлено пользователем: {username}\n"
+                f"🌐 Ссылка: {url}\n"
+                f"✍️ Комментарий: {comment}"
+            )
+        else:
+            caption = (
+                f"🎬 Отправлено пользователем: {username}\n"
+                f"🌐 Ссылка: {url}"
+            )
         caption = caption[:1024]
 
         chat_action_kwargs = {}
@@ -131,9 +143,9 @@ class VideoRouter:
                 user_id, chat_id, chat_type, url, filepath, target_chat_id, target_thread_id
             )
 
-            if not is_private:
-                with contextlib.suppress(Exception):
-                    await m.delete()
+            #if not is_private:
+            with contextlib.suppress(Exception):
+                await m.delete()
 
         except Exception as e:
             log.exception(
