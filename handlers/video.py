@@ -88,7 +88,7 @@ class VideoRouter:
             route_note = "private_echo" if is_private else "group_same_chat"
 
         username = f"@{user.username}" if user and user.username else (user.full_name if user else "unknown")
-        comment = f"{m.text.replace(url, "").strip()}"
+        comment = f"{m.text.replace(url, '').strip()}"
 
         if comment:
             caption = (
