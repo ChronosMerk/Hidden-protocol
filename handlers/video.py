@@ -153,8 +153,22 @@ class VideoRouter:
                 user_id, chat_id, chat_type, url, target_chat_id, target_thread_id, e,
                 extra={"notify": True},
             )
+            err = str(e).lower()
+
+            if "unavailable for certain audiences" in err or "may be inappropriate" in err:
+                msg = "⚠️ Видео недоступно из-за возрастных или региональных ограничений."
+            elif "timed out" in err and "instagram.com" in err:
+                msg = "⚠️ Не удалось подключиться к Instagram (таймаут соединения). Попробуй позже."
+            elif "404" in err:
+                msg = "⚠️ Видео не найдено или было удалено."
+            elif "unsupported url" in err or "no suitable format" in err:
+                msg = "⚠️ Формат ссылки не поддерживается."
+            else:
+                msg = "⚠️ Не удалось скачать или отправить видео. Возможно, сервис недоступен."
+
             with contextlib.suppress(Exception):
-                await m.answer("⚠️ Не удалось скачать или отправить видео. Проверь ссылку или права бота.")
+                await m.answer(msg)
+
         finally:
             if filepath:
                 with contextlib.suppress(Exception):
