@@ -32,6 +32,8 @@ class CoreHandlers:
         )
 
     async def gpt_cmd(self, m: Message):
+        if m.from_user.id not in self.admins:
+            return await m.answer("⛔ У вас нет доступа.")
         await m.answer("GPT функция в разработке.")
 
     async def unknown_cmd(self, m: Message):
