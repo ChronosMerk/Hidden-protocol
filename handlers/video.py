@@ -8,7 +8,8 @@ from aiogram.enums import ChatType, ChatAction
 from aiogram.types import Message, FSInputFile
 
 from app.services.download_video import DownloadVideo
-from app.utils.urls import first_url, domain_ok
+from app.utils.urls import first_url, is_allowed_url
+
 
 def _type_str(t) -> str:
     return t.value if hasattr(t, "value") else str(t)
@@ -54,16 +55,10 @@ class VideoRouter:
             log.debug("skip_no_url user=%s chat=%s type=%s", user_id, chat_id, chat_type)
             return False
 
-        if "instagram.com/p/" in url:
-            log.info(
-                "deny_instagram_post user=%s chat=%s type=%s url=%s reason=instagram_post",
-                user_id, chat_id, chat_type, url, extra={"notify": False}
-            )
-            return False
-
-        if not domain_ok(url):
-            log.info("deny_url user=%s chat=%s type=%s url=%s reason=unsupported_domain",
-                     user_id, chat_id, chat_type, url, extra={"notify": True})
+        # --- Проверка разрешённых доменов ---
+        if not is_allowed_url(url):
+            log.info("deny_url_not_allowed user=%s chat=%s type=%s url=%s reason=not_in_allowed_list",
+                     user_id, chat_id, chat_type, url, extra={"notify": False})
             return False
 
         is_private = _is_private(m.chat)
@@ -75,28 +70,39 @@ class VideoRouter:
                         user_id, chat_id, chat_type, url, extra={"notify": True})
             return False
 
-        # --- Роутинг (приоритеты):
-        # 1) если сообщение пришло в теме — отправляем в эту же тему
-        if not is_private and m.message_thread_id is not None:
-            target_chat_id = chat_id
-            target_thread_id = m.message_thread_id
-            route_note = "group_same_thread"
-        # 2) иначе, если это TOPIC_CHAT_ID и задан TOPIC_THREAD_ID — отправляем туда
-        elif not is_private and self.topic_chat_id and chat_id == self.topic_chat_id and self.topic_thread_id is not None:
+        # --- Роутинг ---
+        # 1) В специальный тред в группе (если настроен и сообщение из этой группы)
+        if not is_private and self.topic_chat_id and chat_id == self.topic_chat_id and self.topic_thread_id is not None:
             target_chat_id = chat_id
             target_thread_id = self.topic_thread_id
             route_note = "group_to_special_thread"
-        # 3) иначе — тот же чат без темы (или ЛС)
+        # 2) Если в группе и сообщение в треде, отправляем в тот же тред
+        elif not is_private and m.message_thread_id is not None:
+            target_chat_id = chat_id
+            target_thread_id = m.message_thread_id
+            route_note = "group_same_thread"
+        # 3) Иначе — в тот же чат без треда или лс
         else:
             target_chat_id = chat_id
-            target_thread_id = None if not is_private else None
+            target_thread_id = None
             route_note = "private_echo" if is_private else "group_same_chat"
 
         username = f"@{user.username}" if user and user.username else (user.full_name if user else "unknown")
-        caption = f"🎬 Отправлено пользователем: {username}\n🌐 Ссылка: {url}"
+        comment = f"{m.text.replace(url, '').strip()}"
+
+        if comment:
+            caption = (
+                f"🎬 Отправлено пользователем: {username}\n"
+                f"🌐 Ссылка: {url}\n"
+                f"✍️ Комментарий: {comment}"
+            )
+        else:
+            caption = (
+                f"🎬 Отправлено пользователем: {username}\n"
+                f"🌐 Ссылка: {url}"
+            )
         caption = caption[:1024]
 
-        # Индикация
         chat_action_kwargs = {}
         if target_thread_id is not None:
             chat_action_kwargs["message_thread_id"] = target_thread_id
@@ -147,8 +153,22 @@ class VideoRouter:
                 user_id, chat_id, chat_type, url, target_chat_id, target_thread_id, e,
                 extra={"notify": True},
             )
+            err = str(e).lower()
+
+            if "unavailable for certain audiences" in err or "may be inappropriate" in err:
+                msg = "⚠️ Видео недоступно из-за возрастных или региональных ограничений."
+            elif "timed out" in err and "instagram.com" in err:
+                msg = "⚠️ Не удалось подключиться к Instagram (таймаут соединения). Попробуй позже."
+            elif "404" in err:
+                msg = "⚠️ Видео не найдено или было удалено."
+            elif "unsupported url" in err or "no suitable format" in err:
+                msg = "⚠️ Формат ссылки не поддерживается."
+            else:
+                msg = "⚠️ Не удалось скачать или отправить видео. Возможно, сервис недоступен."
+
             with contextlib.suppress(Exception):
-                await m.answer("⚠️ Не удалось скачать или отправить видео. Проверь ссылку или права бота.")
+                await m.answer(msg)
+
         finally:
             if filepath:
                 with contextlib.suppress(Exception):
