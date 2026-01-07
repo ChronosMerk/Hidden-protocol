@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Annotated
 
 from aiogram import Bot
@@ -41,7 +40,7 @@ class SendMessageRequest(BaseModel):
 class SendMessageResponse(BaseModel):
     """Ответ API c информацией об отправленном сообщении."""
 
-    ok: bool = True
+    message: bool = True
     chat_id: int | str
     thread_id: int | None = None
     message_id: int
@@ -51,7 +50,7 @@ class SendMessageResponse(BaseModel):
 async def healthcheck() -> dict:
     """Простейший эндпоинт для проверки живости API."""
 
-    return {"status": "ok"}
+    return {"message": "ok"}
 
 
 @app.post("/send-message", response_model=SendMessageResponse)

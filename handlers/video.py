@@ -1,7 +1,7 @@
 import os
 import logging
 import contextlib
-from typing import Optional, Set
+from typing import Optional, Set, Tuple
 
 from aiogram import Router, F
 from aiogram.enums import ChatType, ChatAction
@@ -41,8 +41,47 @@ class VideoRouter:
         self.topic_thread_id = topic_thread_id
         self._register()
 
-    def _register(self):
+    def _register(self) -> None:
         self.router.message.register(self.handle_url, F.text.regexp(URL_PATTERN))
+
+    def _resolve_route(
+        self,
+        *,
+        is_private: bool,
+        chat_id: int,
+        thread_id: Optional[int],
+        comment_lower: str,
+    ) -> Tuple[int, Optional[int], str]:
+        """
+        Возвращает (target_chat_id, target_thread_id, route_note).
+        Приоритеты:
+        1) спец-группа + сообщение в треде + 'disable'  → тот же тред
+        2) спец-группа + настроенный фиксированный тред → фиксированный тред
+        3) любая группа + сообщение в треде            → тот же тред
+        4) иначе: ЛС или общий чат без треда
+        """
+        if (
+            not is_private
+            and self.topic_chat_id
+            and chat_id == self.topic_chat_id
+            and thread_id is not None
+            and comment_lower == "disable"
+        ):
+            return chat_id, thread_id, "special_thread_echo"
+
+        if (
+            not is_private
+            and self.topic_chat_id
+            and chat_id == self.topic_chat_id
+            and self.topic_thread_id is not None
+        ):
+            return chat_id, self.topic_thread_id, "group_to_special_thread"
+
+        if not is_private and thread_id is not None:
+            return chat_id, thread_id, "group_same_thread"
+
+        # Личные сообщения или группы без треда
+        return chat_id, None, ("private_echo" if is_private else "group_same_chat")
 
     async def handle_url(self, m: Message):
         url = first_url(m.text)
@@ -55,10 +94,16 @@ class VideoRouter:
             log.debug("skip_no_url user=%s chat=%s type=%s", user_id, chat_id, chat_type)
             return False
 
-        # --- Проверка разрешённых доменов ---
+        # --- Проверка домена / пути ---
         if not is_allowed_url(url):
-            log.info("deny_url_not_allowed user=%s chat=%s type=%s url=%s reason=not_in_allowed_list",
-                     user_id, chat_id, chat_type, url, extra={"notify": False})
+            log.info(
+                "deny_url_not_allowed user=%s chat=%s type=%s url=%s reason=not_in_allowed_list",
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+                extra={"notify": False},
+            )
             return False
 
         is_private = _is_private(m.chat)
@@ -66,31 +111,39 @@ class VideoRouter:
         is_allowed_group = is_group and (chat_id in self.allowed_group_ids)
 
         if not (is_private or is_allowed_group):
-            log.warning("deny_context user=%s chat=%s type=%s url=%s reason=group_not_allowed",
-                        user_id, chat_id, chat_type, url, extra={"notify": True})
+            log.warning(
+                "deny_context user=%s chat=%s type=%s url=%s reason=group_not_allowed",
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+                extra={"notify": True},
+            )
             return False
 
-        # --- Роутинг ---
-        # 1) В специальный тред в группе (если настроен и сообщение из этой группы)
-        if not is_private and self.topic_chat_id and chat_id == self.topic_chat_id and self.topic_thread_id is not None:
-            target_chat_id = chat_id
-            target_thread_id = self.topic_thread_id
-            route_note = "group_to_special_thread"
-        # 2) Если в группе и сообщение в треде, отправляем в тот же тред
-        elif not is_private and m.message_thread_id is not None:
-            target_chat_id = chat_id
-            target_thread_id = m.message_thread_id
-            route_note = "group_same_thread"
-        # 3) Иначе — в тот же чат без треда или лс
+        # --- Подготовка данных ---
+        if user and user.username:
+            username = f"@{user.username}"
+        elif user:
+            username = user.full_name
         else:
-            target_chat_id = chat_id
-            target_thread_id = None
-            route_note = "private_echo" if is_private else "group_same_chat"
+            username = "unknown"
 
-        username = f"@{user.username}" if user and user.username else (user.full_name if user else "unknown")
-        comment = f"{m.text.replace(url, '').strip()}"
+        # Комментарий = текст без URL
+        raw_text = m.text or ""
+        comment = raw_text.replace(url, "").strip()
+        comment_lower = comment.lower()
 
-        if comment:
+        # --- Роутинг ---
+        target_chat_id, target_thread_id, route_note = self._resolve_route(
+            is_private=is_private,
+            chat_id=chat_id,
+            thread_id=m.message_thread_id,
+            comment_lower=comment_lower,
+        )
+
+        # --- Подпись к видео ---
+        if comment and comment_lower != "disable":
             caption = (
                 f"🎬 Отправлено пользователем: {username}\n"
                 f"🌐 Ссылка: {url}\n"
@@ -103,27 +156,51 @@ class VideoRouter:
             )
         caption = caption[:1024]
 
+        # --- Индикация "загружаем видео" ---
         chat_action_kwargs = {}
         if target_thread_id is not None:
             chat_action_kwargs["message_thread_id"] = target_thread_id
+
         try:
-            await m.bot.send_chat_action(target_chat_id, ChatAction.UPLOAD_VIDEO, **chat_action_kwargs)
+            await m.bot.send_chat_action(
+                target_chat_id,
+                ChatAction.UPLOAD_VIDEO,
+                **chat_action_kwargs,
+            )
         except Exception as e:
             log.exception(
                 "chat_action_fail user=%s chat=%s type=%s url=%s target_chat=%s target_thread=%s err=%s",
-                user_id, chat_id, chat_type, url, target_chat_id, target_thread_id, e,
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+                target_chat_id,
+                target_thread_id,
+                e,
                 extra={"notify": True},
             )
             return
 
         log.info(
             "route user=%s chat=%s type=%s url=%s -> target_chat=%s target_thread=%s note=%s",
-            user_id, chat_id, chat_type, url, target_chat_id, target_thread_id, route_note
+            user_id,
+            chat_id,
+            chat_type,
+            url,
+            target_chat_id,
+            target_thread_id,
+            route_note,
         )
 
-        filepath = None
+        filepath: Optional[str] = None
         try:
-            log.info("download_start user=%s chat=%s type=%s url=%s", user_id, chat_id, chat_type, url)
+            log.info(
+                "download_start user=%s chat=%s type=%s url=%s",
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+            )
             res = await self.downloader.download(url)
             filepath = res["filepath"]
 
@@ -140,17 +217,29 @@ class VideoRouter:
 
             log.info(
                 "download_ok user=%s chat=%s type=%s url=%s file=%s sent_to=%s thread=%s",
-                user_id, chat_id, chat_type, url, filepath, target_chat_id, target_thread_id
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+                filepath,
+                target_chat_id,
+                target_thread_id,
             )
 
-            #if not is_private:
+            # if not is_private:
             with contextlib.suppress(Exception):
                 await m.delete()
 
         except Exception as e:
             log.exception(
                 "send_fail user=%s chat=%s type=%s url=%s target_chat=%s thread=%s err=%s",
-                user_id, chat_id, chat_type, url, target_chat_id, target_thread_id, e,
+                user_id,
+                chat_id,
+                chat_type,
+                url,
+                target_chat_id,
+                target_thread_id,
+                e,
                 extra={"notify": True},
             )
             err = str(e).lower()

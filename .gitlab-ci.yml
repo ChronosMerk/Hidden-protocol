@@ -1,0 +1,81 @@
+stages:
+  - stage_validation
+  - stage_build
+  - stage_deploy_dev
+  - stage_test
+  - stage_deploy_prod
+
+variables:
+  COMPOSE_FILE: docker-compose.yml
+
+.generate_env_template:
+  before_script:
+    - Set-Content -Path .env -Value "ADMIN_IDS=$env:ADMIN_IDS" -Encoding UTF8
+    - Add-Content -Path .env -Value "ALLOWED_GROUP_IDS=$env:ALLOWED_GROUP_IDS"
+    - Add-Content -Path .env -Value "API_KEY_JWT=$env:API_KEY_JWT"
+    - Add-Content -Path .env -Value "DOWNLOAD_DIR=$env:DOWNLOAD_DIR"
+    - Add-Content -Path .env -Value "HOST=$env:HOST"
+    - Add-Content -Path .env -Value "LOG_CHAT_ID=$env:LOG_CHAT_ID"
+    - Add-Content -Path .env -Value "LOG_LEVEL=$env:LOG_LEVEL"
+    - Add-Content -Path .env -Value "LOG_THREAD_ID=$env:LOG_THREAD_ID"
+    - Add-Content -Path .env -Value "PORT=$env:PORT"
+    - Add-Content -Path .env -Value "TOKEN=$env:TOKEN"
+    - Add-Content -Path .env -Value "TOPIC_CHAT_ID=$env:TOPIC_CHAT_ID"
+    - Add-Content -Path .env -Value "TOPIC_THREAD_ID=$env:TOPIC_THREAD_ID"
+    - Write-Host "Generated .env:"
+    - Get-Content .env
+
+build_job:
+  stage: stage_build
+  tags: [hidden-protocol-win]
+  extends:
+    - .generate_env_template
+  script:
+    - docker compose -f "$COMPOSE_FILE" build
+    - echo "Building the project..."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+
+deploy_job_dev:
+  stage: stage_deploy_dev
+  tags: [hidden-protocol-win]
+  extends:
+    - .generate_env_template
+  script:
+    - docker compose -f "$COMPOSE_FILE" up -d
+  needs:
+    - build_job
+  rules:
+    # деплой на dev-стенд для dev и main
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+
+test_api_bot_job:
+  stage: stage_test
+  needs:
+    - deploy_job_dev
+  trigger:
+    project: ChronosMerk/api_autotest
+    strategy: depend
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+
+test_e2e_job:
+  stage: stage_test
+  needs:
+    - deploy_job_dev
+  script:
+    - echo "Running end-to-end tests..."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+
+deploy_job_prod:
+  stage: stage_deploy_prod
+  needs:
+    - job: test_api_bot_job
+    - job: test_e2e_job
+  script:
+    - echo "Deploying the project..."
+  rules:
+    # деплой в прод: только для main и только по кнопке
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
