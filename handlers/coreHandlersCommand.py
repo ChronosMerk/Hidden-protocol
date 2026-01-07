@@ -3,6 +3,7 @@ from typing import Set
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
+from app.data.commandStartText import get_start_text
 from app.utils.logger import setup_logger
 
 class CoreHandlers:
@@ -20,7 +21,9 @@ class CoreHandlers:
 
     async def start(self, m: Message):
         self.log.info(f"/start от @{m.from_user.username or m.from_user.full_name} (ID: {m.from_user.id})")
-        await m.answer("Hidden protocol активен. Используй /help для списка команд.")
+        user_id = m.from_user.id if m.from_user else None
+        text = get_start_text(user_id)
+        await m.answer(text)
 
     async def help_cmd(self, m: Message):
         self.log.info(f"/help от @{m.from_user.username or m.from_user.full_name} (ID: {m.from_user.id})")

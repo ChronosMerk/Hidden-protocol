@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher
 
 from app.config import Config
 from handlers.coreHandlersCommand import CoreHandlers
+from handlers.joinHandlers import router_join
 from handlers.video import VideoRouter
 from app.services.download_video import DownloadVideo
 from app.utils.logger import setup_logger, NotifyOrErrorFilter
@@ -21,6 +22,8 @@ class RunHiddenProtocol:
         # Команды
         core = CoreHandlers(admins=self.cfg["ADMIN_IDS"])
         self.dp.include_router(core.router)
+
+        self.dp.include_router(router_join)
 
         # Видео с ограничениями: только ЛС и ALLOWED_GROUP_IDS
         downloader = DownloadVideo(download_dir=self.cfg.get("DOWNLOAD_DIR", "./downloads"))

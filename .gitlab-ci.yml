@@ -1,11 +1,9 @@
-
 stages:
   - stage_validation
   - stage_build
   - stage_deploy_dev
   - stage_test
   - stage_deploy_prod
-
 
 variables:
   COMPOSE_FILE: docker-compose.yml
@@ -28,15 +26,15 @@ variables:
     - Get-Content .env
 
 build_job:
-    stage: stage_build
-    tags: [hidden-protocol-win]
-    extends:
-      - .generate_env_template
-    script:
-      - docker compose -f "$COMPOSE_FILE" build
-      - echo "Building the project..."
-    rules:
-    - if: $CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"
+  stage: stage_build
+  tags: [hidden-protocol-win]
+  extends:
+    - .generate_env_template
+  script:
+    - docker compose -f "$COMPOSE_FILE" build
+    - echo "Building the project..."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 deploy_job_dev:
   stage: stage_deploy_dev
@@ -47,29 +45,37 @@ deploy_job_dev:
     - docker compose -f "$COMPOSE_FILE" up -d
   needs:
     - build_job
-  only:
-    - dev
+  rules:
+    # деплой на dev-стенд для dev и main
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 test_api_bot_job:
-    stage: stage_test
-    needs:
-      - deploy_job_dev
-    trigger:
-      project: ChronosMerk/api_autotest
-      strategy: depend
+  stage: stage_test
+  needs:
+    - deploy_job_dev
+  trigger:
+    project: ChronosMerk/api_autotest
+    strategy: depend
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 test_e2e_job:
-    stage: stage_test
-    script:
-      - echo "Running end-to-end tests..."
+  stage: stage_test
+  needs:
+    - deploy_job_dev
+  script:
+    - echo "Running end-to-end tests..."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
 
 deploy_job_prod:
-    stage: stage_deploy_prod
-    needs:
-      - test_api_bot_job
-      - test_e2e_job
-    script:
-      - echo "Deploying the project..."
-    rules:
-      - when: manual
-
+  stage: stage_deploy_prod
+  needs:
+    - job: test_api_bot_job
+    - job: test_e2e_job
+  script:
+    - echo "Deploying the project..."
+  rules:
+    # деплой в прод: только для main и только по кнопке
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
